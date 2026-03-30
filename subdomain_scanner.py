@@ -9,42 +9,51 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # ================= CONFIG =================
 SUBDOMAINS = ["www","mail","ftp","dev","api","test","staging","beta","admin"]
 
-VT_API_KEY = ""   # optional
-ST_API_KEY = ""   # optional
+VT_API_KEY = ""
+ST_API_KEY = ""
 
 TIMEOUT = 30
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_FILE = os.path.join(SCRIPT_DIR, "recon_results.txt")
+ALL_FILE = os.path.join(SCRIPT_DIR, "all_subdomains.txt")
+LIVE_FILE = os.path.join(SCRIPT_DIR, "live_subdomains.txt")
 
-HEADERS = {"User-Agent": "ReconTool/2.0"}
+HEADERS = {"User-Agent": "ReconTool/3.0"}
 
 # ================= CORE =================
 
 def resolve(domain):
     try:
-        ip = socket.gethostbyname(domain)
-        return f"{domain} -> {ip}"
+        socket.gethostbyname(domain)
+        return True
     except:
-        return None
+        return False
 
-# ---------- Sources ----------
+
+def check_alive(domain):
+    urls = [f"https://{domain}", f"http://{domain}"]
+
+    for url in urls:
+        try:
+            r = requests.get(url, timeout=TIMEOUT, headers=HEADERS)
+            return f"{domain} -> {url} [{r.status_code}]"
+        except:
+            continue
+
+    return None
+
+# ---------- SOURCES ----------
 
 def brute_force(domain):
-    print("[*] Brute-force started")
-    found = set()
-    for sub in SUBDOMAINS:
-        full = f"{sub}.{domain}"
-        found.add(full)
-    return found
+    print("[*] Brute-force")
+    return {f"{sub}.{domain}" for sub in SUBDOMAINS}
 
 
 def crtsh(domain):
     print("[*] crt.sh")
     found = set()
     try:
-        r = requests.get(f"https://crt.sh/?q=%25.{domain}&output=json",
-                         timeout=TIMEOUT)
+        r = requests.get(f"https://crt.sh/?q=%25.{domain}&output=json", timeout=TIMEOUT)
         for entry in r.json():
             for sub in entry['name_value'].split("\n"):
                 if domain in sub:
@@ -64,8 +73,8 @@ def otx(domain):
             host = entry.get("hostname")
             if host and domain in host:
                 found.add(host)
-    except Exception as e:
-        print(f"[!] OTX error: {e}")
+    except:
+        pass
     return found
 
 
@@ -75,15 +84,14 @@ def wayback(domain):
     try:
         url = f"http://web.archive.org/cdx/search/cdx?url=*.{domain}&output=json&fl=original"
         r = requests.get(url, timeout=TIMEOUT)
+        data = r.json()[1:300]
 
-        data = r.json()[1:300]  # skip header + limit
         for entry in data:
             sub = entry[0].split("/")[2]
             if domain in sub:
                 found.add(sub)
-
-    except Exception as e:
-        print(f"[!] Wayback error: {e}")
+    except:
+        pass
     return found
 
 
@@ -94,16 +102,13 @@ def github(domain):
         url = f"https://api.github.com/search/code?q={domain}"
         r = requests.get(url, timeout=TIMEOUT)
 
-        if r.status_code != 200:
-            return found
-
-        for item in r.json().get("items", [])[:20]:
-            name = item.get("name", "")
-            if domain in name:
-                found.add(name)
-
-    except Exception as e:
-        print(f"[!] GitHub error: {e}")
+        if r.status_code == 200:
+            for item in r.json().get("items", [])[:20]:
+                name = item.get("name", "")
+                if domain in name:
+                    found.add(name)
+    except:
+        pass
     return found
 
 
@@ -121,10 +126,8 @@ def virustotal(domain):
 
         for item in r.json().get("data", []):
             found.add(item["id"])
-
-    except Exception as e:
-        print(f"[!] VT error: {e}")
-
+    except:
+        pass
     return found
 
 
@@ -142,17 +145,15 @@ def securitytrails(domain):
 
         for sub in r.json().get("subdomains", []):
             found.add(f"{sub}.{domain}")
-
-    except Exception as e:
-        print(f"[!] ST error: {e}")
-
+    except:
+        pass
     return found
 
 
 # ================= MAIN =================
 
 def main():
-    parser = argparse.ArgumentParser(description="Fast Subdomain Recon Tool")
+    parser = argparse.ArgumentParser(description="Advanced Recon Tool")
     parser.add_argument("-d", "--domain", help="Target domain")
     args = parser.parse_args()
 
@@ -172,14 +173,12 @@ def main():
 
     all_subs = set()
 
-    # 🔥 Run all sources in parallel
+    # Run sources in parallel
     with ThreadPoolExecutor(max_workers=7) as executor:
-        future_to_source = {
-            executor.submit(src, domain): src.__name__ for src in sources
-        }
+        futures = {executor.submit(src, domain): src.__name__ for src in sources}
 
-        for future in as_completed(future_to_source):
-            name = future_to_source[future]
+        for future in as_completed(futures):
+            name = futures[future]
             try:
                 results = future.result()
                 print(f"[+] {name} → {len(results)} found")
@@ -187,28 +186,48 @@ def main():
             except Exception as e:
                 print(f"[!] {name} failed: {e}")
 
-    print(f"\n[*] Total collected before resolution: {len(all_subs)}")
+    print(f"\n[*] Total discovered: {len(all_subs)}")
 
-    # 🔥 Resolve in parallel
-    print("\n[*] Resolving live domains...\n")
+    # Save ALL subdomains
+    with open(ALL_FILE, "w") as f:
+        for sub in sorted(all_subs):
+            f.write(sub + "\n")
 
-    final_results = set()
+    print(f"[💾] Saved all subdomains → {ALL_FILE}")
 
+    # Filter resolvable first
+    print("\n[*] Checking DNS resolution...\n")
+
+    resolvable = set()
     with ThreadPoolExecutor(max_workers=50) as executor:
-        futures = [executor.submit(resolve, sub) for sub in all_subs]
+        futures = {executor.submit(resolve, sub): sub for sub in all_subs}
+
+        for future in as_completed(futures):
+            sub = futures[future]
+            if future.result():
+                resolvable.add(sub)
+
+    print(f"[+] Resolvable: {len(resolvable)}")
+
+    # Alive check
+    print("\n[*] Checking alive domains (HTTP/HTTPS)...\n")
+
+    live_results = set()
+    with ThreadPoolExecutor(max_workers=30) as executor:
+        futures = {executor.submit(check_alive, sub): sub for sub in resolvable}
 
         for future in as_completed(futures):
             result = future.result()
             if result:
                 print(f"[+] {result}")
-                final_results.add(result)
+                live_results.add(result)
 
-    # Save
-    with open(OUTPUT_FILE, "w") as f:
-        for line in sorted(final_results):
+    # Save LIVE
+    with open(LIVE_FILE, "w") as f:
+        for line in sorted(live_results):
             f.write(line + "\n")
 
-    print(f"\n✅ Done. Saved to: {OUTPUT_FILE}")
+    print(f"\n✅ Live domains saved → {LIVE_FILE}")
 
 
 if __name__ == "__main__":
