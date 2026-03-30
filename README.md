@@ -1,88 +1,130 @@
-🛰️ Elite Subdomain Recon Tool
-A powerful Python-based reconnaissance tool designed for subdomain discovery, enumeration, and takeover detection using multiple intelligence sources.
-This tool combines active + passive recon techniques, integrates external tools, and includes automatic binary setup, making it a portable and efficient red teaming utility.
+🛰️ Advanced Subdomain Recon Tool (Python)
+A high-speed, multi-source subdomain reconnaissance tool built in Python. It aggregates intelligence from multiple sources, validates DNS, and performs live HTTP/HTTPS checks — all in parallel.
+Think of it as a digital разведчик (scout) that maps the hidden surface of a domain 🌐
 
 🚀 Features
-	•	🔍 Subdomain Enumeration (Brute-force + Passive)
-	•	🌐 Multi-source Recon:
-	◦	crt.sh (Certificate Transparency)
-	◦	Subfinder (auto-install supported)
-	◦	Amass (auto-install supported)
-	•	⚡ Fast Multithreaded DNS Resolution
-	•	🔥 Subdomain Takeover Detection
-	•	🌐 Optional Alive Host Detection (HTTP status)
-	•	📊 JSON Output Support (for automation pipelines)
-	•	🧰 Self-bootstrapping tool installer (Subfinder + Amass)
+	•	⚡ Parallel Multi-Source Enumeration
+	◦	Brute-force
+	◦	Certificate Transparency (crt.sh)
+	◦	AlienVault OTX
+	◦	Wayback Machine
+	◦	GitHub (basic scraping)
+	◦	VirusTotal (optional API)
+	◦	SecurityTrails (optional API)
+	•	🌐 DNS Resolution Filtering
+	◦	Identifies valid subdomains
+	•	🔎 Alive Check (HTTP/HTTPS)
+	◦	HTTPS first, then HTTP fallback
+	◦	Captures status codes (200, 403, etc.)
+	•	💾 Dual Output Files
+	◦	all_subdomains.txt → all discovered
+	◦	live_subdomains.txt → only active hosts
+	•	⚙️ Portable & Path-Independent
+	◦	Works from any directory
+	◦	Saves output in script location
+	•	⏱️ Timeout Controlled (30s)
+	◦	Prevents hanging requests
 
-🧰 Requirements
-	•	Python 3.8+
-	•	macOS or Linux (tested)
-Python Dependencies:
-Install required modules:
-pip3 install requests dnspython
+🧰 Tech Stack
+	•	Python 3.x
+	•	requests
+	•	socket (built-in)
+	•	concurrent.futures
 
-⚙️ Installation
+📦 Installation
 Clone the repository:
-git clone https://github.com/krishankr1/subdomain_scanner.git
-cd subdomain-recon
+
+git https://github.com/krishankr1/subdomain_scanner.git
+cd subdomain-recon-tool
+
+Install dependencies:
+
+pip3 install requests
+
 
 ▶️ Usage
-🔹 Basic Scan
+Run the tool:
+
 python3 subdomain_scanner.py -d example.com
 
-🔹 Scan with Alive Host Detection
-python3 subdomain_scanner.py -d example.com --alive
+Or interactive mode:
 
-🔹 Export Results in JSON
-python3 subdomain_scanner.py -d example.com --json
+python3 subdomain_scanner.py
+
 
 📁 Output
-Results are saved in the same directory as the script:
-	•	recon_results.txt (default)
-	•	recon_results.json (if --json is used)
+After execution, two files are generated:
+1️⃣ All Discovered Subdomains
+
+all_subdomains.txt
+
+Example:
+
+api.example.com
+dev.example.com
+staging.example.com
+
+
+2️⃣ Live Subdomains (HTTP/HTTPS Responding)
+
+live_subdomains.txt
+
+Example:
+
+www.example.com -> https://www.example.com [200]
+api.example.com -> http://api.example.com [403]
+
 
 🧠 How It Works
-	1	Performs brute-force subdomain guessing
-	2	Queries crt.sh for passive discovery
-	3	Uses Subfinder & Amass (auto-installed if missing)
-	4	Resolves subdomains to IP addresses
-	5	Detects potential takeover vulnerabilities
-	6	Saves results locally
 
-🔥 Subdomain Takeover Detection
-The tool checks for common misconfigurations in services like:
-	•	GitHub Pages
-	•	AWS S3
-	•	Heroku
-	•	Azure
-	•	CloudFront
-	•	Fastly
-⚠️ Note: Detection is heuristic-based. Always verify manually.
+[ Sources ]
+   ↓
+Aggregate Subdomains
+   ↓
+Remove Duplicates
+   ↓
+DNS Resolution Check
+   ↓
+HTTP/HTTPS Alive Check
+   ↓
+Save Results
+
+
+🔑 Optional API Configuration
+To unlock more sources, add your API keys inside the script:
+
+VT_API_KEY = "your_virustotal_key"
+ST_API_KEY = "your_securitytrails_key"
+
+
+⚠️ Notes
+	•	Some sources may be slow or rate-limited
+	•	GitHub search may require authentication for better results
+	•	Wayback results are limited for performance
+	•	macOS users may see:  NotOpenSSLWarning               This is harmless and does not affect functionality
+
+🛠️ Customization Ideas
+	•	Add larger wordlists (SecLists)
+	•	Integrate more APIs (Shodan, Censys)
+	•	Add JSON/CSV output
+	•	Implement async scanning
+	•	Add screenshot capture
 
 ⚠️ Disclaimer
 This tool is intended for:
-	•	Educational purposes
-	•	Authorized security testing only
-Do NOT use this tool on systems without explicit permission.
+	•	✅ Educational purposes
+	•	✅ Authorized security testing
+Do NOT use against targets without permission.
 
-🛠️ Optional (Recommended Setup)
-For better stability, install tools manually:
-brew install amass
-brew install subfinder
-
-🚀 Future Improvements
-	•	Async scanning (performance boost)
-	•	Screenshot automation
-	•	Subdomain permutation engine
-	•	Takeover auto-verification
-	•	Proxy / stealth mode
-	•	Web dashboard interface
+🧭 Roadmap
+	•	⚡ Async engine (faster than threading)
+	•	📊 Structured output (JSON)
+	•	🌐 HTTP probing enhancements
+	•	🎯 Subdomain takeover detection
+	•	📸 Visual recon (screenshots)
 
 🤝 Contributing
-Contributions are welcome. Feel free to submit pull requests or suggest improvements.
+Pull requests are welcome. Ideas, improvements, and optimizations are encouraged.
 
 ⭐ Support
-If you find this tool useful, consider giving it a ⭐ on GitHub.
-
-👨‍💻 Author
-Developed for recon, red teaming, and learning purposes.
+If this tool helped you, consider giving it a ⭐ on GitHub. It helps others discover it and keeps development alive.
